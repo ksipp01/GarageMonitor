@@ -31,6 +31,9 @@ namespace GarageMonitor2
             timer3 = new System.Timers.Timer();//delay to alarm
             timer3.Elapsed += new ElapsedEventHandler(OnTimedEvent);
             timer3.AutoReset = true;
+            timer4 = new System.Timers.Timer();//delay to alarm
+            timer4.Elapsed += new ElapsedEventHandler(OnTimedEvent);
+            timer4.AutoReset = true;
             timerRepeat = new System.Timers.Timer(1800000); //30 min repeat alarm if not reset
             timerRepeat.Elapsed += new ElapsedEventHandler(OnTimedRepeatEvent);
             timerRepeat.AutoReset = true;
@@ -44,6 +47,7 @@ namespace GarageMonitor2
         DateTime expire;
         DateTime start;
         private static System.Timers.Timer timer3;
+        private static System.Timers.Timer timer4;
         private static System.Timers.Timer timerRepeat;
         private static System.Timers.Timer timerLight;
 
@@ -434,7 +438,7 @@ namespace GarageMonitor2
                                         SoundPlayer simpleSound = new SoundPlayer(@"c:\Windows\Media\Windows Print complete.wav");
                                         simpleSound.Play();
                                         notifyIcon1.Visible = true;
-                                        notifyIcon1.ShowBalloonTip(11000, "Garage Monitor 2", "Garage Door Closed", ToolTipIcon.Info);
+                                        notifyIcon1.ShowBalloonTip(11000, "Garage Monitor 2", "Garage Door2 Closed", ToolTipIcon.Info);
                                     }
                                 }
                                 button3.Text = "Closed";
@@ -464,7 +468,7 @@ namespace GarageMonitor2
                                         SoundPlayer simpleSound = new SoundPlayer(@"c:\Windows\Media\Windows Notify.wav");
                                         simpleSound.Play();
                                         notifyIcon1.Visible = true;
-                                        notifyIcon1.ShowBalloonTip(11000, "Garage Monitor 2", "Garage Door Open", ToolTipIcon.Info);
+                                        notifyIcon1.ShowBalloonTip(11000, "Garage Monitor 2", "Garage Door2 Open", ToolTipIcon.Info);
                                     }
                                     timer3.Start();
                                     Log("Alarm Delay Start: " + DateTime.Now);
@@ -482,6 +486,7 @@ namespace GarageMonitor2
                         if (button3.Text == "Open" & alarm & !msgSent)
                         {
                             timer3.Stop();
+                            alarmNumber = "1";
                             AlarmMsg();
                             //  timer2.Stop();
                             //  timer2.Interval = delay * 60 * 1000;
@@ -528,7 +533,7 @@ namespace GarageMonitor2
                                             SoundPlayer simpleSound = new SoundPlayer(@"c:\Windows\Media\Windows Print complete.wav");
                                             simpleSound.Play();
                                             notifyIcon1.Visible = true;
-                                            notifyIcon1.ShowBalloonTip(11000, "Garage Monitor 2", "Garage Door Closed", ToolTipIcon.Info);
+                                            notifyIcon1.ShowBalloonTip(11000, "Garage Monitor 2", "Garage Door2 Closed", ToolTipIcon.Info);
                                         }
                                     }
                                     button5.Text = "Closed";
@@ -551,16 +556,16 @@ namespace GarageMonitor2
                                     //             Log("Door OPEN: " + DateTime.Now);
                                     //if (!msgSent & timer2.Enabled == false)
                                     //    timer2.Start();
-                                    if (!msgSent & timer3.Enabled == false)  // first pass after opened
+                                    if (!msgSent & timer4.Enabled == false)  // first pass after opened
                                     {
                                         if (chime)
                                         {
                                             SoundPlayer simpleSound = new SoundPlayer(@"c:\Windows\Media\Windows Notify.wav");
                                             simpleSound.Play();
                                             notifyIcon1.Visible = true;
-                                            notifyIcon1.ShowBalloonTip(11000, "Garage Monitor 2", "Garage Door Open", ToolTipIcon.Info);
+                                            notifyIcon1.ShowBalloonTip(11000, "Garage Monitor 2", "Garage Door2 Open", ToolTipIcon.Info);
                                         }
-                                        timer3.Start();
+                                        timer4.Start();
                                         Log("Alarm Delay Start: " + DateTime.Now);
                                     }
                                 }
@@ -575,7 +580,8 @@ namespace GarageMonitor2
                             }
                             if (button5.Text == "Open" & alarm & !msgSent)
                             {
-                                timer3.Stop();
+                                timer4.Stop();
+                                alarmNumber = "2";
                                 AlarmMsg();
                                 Log("Alarm Timer Stopped: " + DateTime.Now);
                             }
@@ -583,7 +589,7 @@ namespace GarageMonitor2
                                 ResetMsg();
                             if (button5.Text == "Closed" & !msgSent)
                             {
-                                timer3.Stop();
+                                timer4.Stop();
                             }
 
                         } //end using
@@ -651,14 +657,14 @@ namespace GarageMonitor2
         //}
 
 
-
+        string alarmNumber;
         private bool msgSent = false;
         private void AlarmMsg()
         {
 
             if (checkBox3SendText.Checked == true)
             {
-                Send("The Garage door has been open for " + numericUpDown1.Value.ToString() + " minutes");
+                Send("Garage door" + alarmNumber + " has been open for " + numericUpDown1.Value.ToString() + " minutes");
             }
             if (localAlarm)
             {
@@ -804,7 +810,7 @@ namespace GarageMonitor2
             }
            
               
-            //timer2.Interval = delay * 60 * 1000;
+            timer4.Interval = delay * 60 * 1000;
             timer3.Interval = delay * 60 * 1000;
             Thread.Sleep(1000);
             this.Show();
@@ -1267,6 +1273,7 @@ namespace GarageMonitor2
         {
             delay = (int)numericUpDown1.Value;
             timer3.Interval = delay * 60 * 1000;
+            timer4.Interval = delay * 60 * 1000;
         }
 
      
@@ -1330,6 +1337,8 @@ namespace GarageMonitor2
             else
                 useDoor2 = false;
         }
+
+      
 
 
 
