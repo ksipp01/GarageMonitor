@@ -71,6 +71,7 @@ namespace GarageMonitor2
 
         bool sendText;
         string device;
+        string device2;
         bool loggedIn = false;
 
         private string path = System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData);
@@ -185,6 +186,7 @@ namespace GarageMonitor2
                         Log("Key: " + key);
                         ////file.WriteLine("Refresh: " + refresh);
                         //file.Close();
+                        loggedIn = true;
                     }
                     catch (Exception ex)
                     {
@@ -223,15 +225,56 @@ namespace GarageMonitor2
                     }
 
                     textBox4.Focus();
+                     return;
 
                 }
+                // add for door 2
+                if (textBox9.Text == "" & useDoor2)
+                {
+                    try
+                    {
+                        //list devices (works) 
+                        httpClient.DefaultRequestHeaders.TryAddWithoutValidation("authentication", "APIKey " + key);
+
+                        httpClient.DefaultRequestHeaders.TryAddWithoutValidation("authorization", "Bearer " + token);
+
+                        using (var response = await httpClient.GetAsync("devices"))
+                        {
+
+                            string responseData = await response.Content.ReadAsStringAsync();
+                            // MessageBox.Show(responseData);
+                            MessageBox.Show(responseData, "Find Device number and enter in Text Box");
+                            //System.IO.StreamWriter file = new System.IO.StreamWriter(path + "\\GM2log.txt", true);
+                            ////  System.IO.StreamWriter file = new System.IO.StreamWriter("c:\\users\\ksipp_000\\desktop\\token.txt", true);
+                            //file.WriteLine("Devices: " + responseData);
+                            //file.Close();
+                            Log("Devices: " + responseData);
+
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log("Fialed Device list: " + ex.ToString());
+                    }
+
+                    textBox9.Focus();
+                    return;
+                }
+
 
             }
-            loggedIn = true;
+           
             Thread.Sleep(2000);
-            if (textBox4.Text != "")
-                ConfirmDevice();
+            ConfirmDevice();
+            //if (textBox4.Text != "")
+            //    ConfirmDevice();
+            //if (useDoor2)
+            //{
+            //    if (textBox9.Text != "")
+            //        ConfirmDevice();
+            //}
         }
+
 
         private bool IsExpired()
         {
@@ -270,16 +313,16 @@ namespace GarageMonitor2
         private async void Sample()
         {
             Rootobject root;
+            Rootobject root2;
             if (IsExpired())
             {
             //    firstSampleLog = false; // redo first sample log
                 RefreshToken();
             }
-            string statusCommand;
-
 
             try
             {
+
                 var baseAddress = new Uri("https://connect.insteon.com/api/v2/");
                 using (var httpClient = new HttpClient { BaseAddress = baseAddress })
                 {
@@ -288,6 +331,11 @@ namespace GarageMonitor2
                     //  label13.BackColor = Color.Yellow;
                     label2.BackColor = Color.Yellow;
                     label2.Text = "Polling";
+                    if (useDoor2)
+                    {
+                        label21.BackColor = Color.Yellow;
+                        label21.Text = "Polling";
+                    }
                     httpClient.DefaultRequestHeaders.TryAddWithoutValidation("http", "//docs.insteon.apiary.io/");
                     httpClient.DefaultRequestHeaders.TryAddWithoutValidation("authentication", "APIKey " + key);
                     httpClient.DefaultRequestHeaders.TryAddWithoutValidation("authorization", "Bearer " + token);
@@ -320,53 +368,53 @@ namespace GarageMonitor2
 
                                 return;
                             }
-                               
-                            //if (!firstSampleLog) //no need to log all samples // remd 11-2-17 not needed
-                            //{
-                            //    //System.IO.StreamWriter file = new System.IO.StreamWriter(path + "\\GM2log.txt", true);
-                            //    ////  System.IO.StreamWriter file = new System.IO.StreamWriter("c:\\users\\ksipp_000\\desktop\\token.txt", true);
-                            //    //file.WriteLine("Command: " + statusCommand);
-                            //    //file.Close();
-                            //    //// firstSampleLog = true;
 
-                            //    Log("Command: " + statusCommand);
-
-                            //}
                         }
                     }
 
-                    // label13.BackColor = Color.Transparent;
-                    Thread.Sleep(1500);
+                    // added for door2
+                    if (useDoor2)
+                    {
+                        using (var content2 = new StringContent("{  \"command\": \"get_sensor_status\",  \"device_id\": " + device2 + "}", System.Text.Encoding.Default, "application/json"))
+                        {
+                            using (var response2 = await httpClient.PostAsync("commands", content2))
+                            {
 
-                    //   label2.BackColor = Color.Red;
-                    //check status of previous command...
+                                string responseData2 = await response2.Content.ReadAsStringAsync();
+                                //  MessageBox.Show(responseData);
+                                List<string> keyValuePairs = responseData2.Split(':').ToList();
+                                if (keyValuePairs.Count > 3) // fixes list index error if it's zero it will hang
+                                {
+                                    statusCommand2 = keyValuePairs[3].Substring(0, keyValuePairs[3].Length - 1);
+                                }
+                                else
+                                {
+                                    Log("statusCommand2 error: keyValuePair.Count = " + keyValuePairs.Count.ToString());
+                                    for (int i = 0; i < keyValuePairs.Count + 1; i++)
+                                    {
+                                        Log("keyValuePairs[" + i.ToString() + "]= " + keyValuePairs[i].ToString());
+                                        if (keyValuePairs[i].Contains("The access key has expired") == true) // this may not be needed since changing line 238 
+                                        {
+                                            RefreshToken();
+                                            return;
+                                        }
+                                    }
+
+                                    return;
+                                }
+
+                            }
+                        }
+                    }
+
+
+
+                    Thread.Sleep(1500);
                     using (var response = await httpClient.GetAsync("commands/" + statusCommand))
                     {
 
                         var responseData = await response.Content.ReadAsStringAsync(); // was string
-                        //if (!firstSampleLog) //no need to log all samples // remd 11-2-17
-                        //{
-                        //    //System.IO.StreamWriter file = new System.IO.StreamWriter(path + "\\GM2log.txt", true);
-                        //    ////  System.IO.StreamWriter file = new System.IO.StreamWriter("c:\\users\\ksipp_000\\desktop\\token.txt", true);
-                        //    //file.WriteLine("Status: " + responseData);
-                        //    //file.Close();
-                        //    Log("Status: " + responseData);
-                        //    firstSampleLog = true;
-                        //}
-                        // 1-3-17 try using jsons
-
-
                         root = JsonConvert.DeserializeObject<Rootobject>(responseData);
-
-
-                        //List<string> keyValuePairs = responseData.Split(':').ToList();                      
-                        //string level = keyValuePairs[7].Substring(0, 3);
-
-
-
-                        //  Log(level);
-                        //    if (level == "0}}")  seesm liek ath API is backwards so changed to below. 
-                        // if (level == "100")
                         if (root.status == "succeeded")
                         {
                             //Log("Response: " + root.response.level.ToString());
@@ -428,21 +476,8 @@ namespace GarageMonitor2
                             return;
                         }
                         else
-                        {
-                            //if (retry < 3)  // remd 11-2-17
-                            //{
-                            //    //  Sample();
-                            //    retry++;
-                            //   Log("Sample error" + retry.ToString() + ", get_status:  " + responseData + "  " + DateTime.Now);
+                        {                   
                             Log("Sample error, get_status:  " + responseData + "  " + DateTime.Now);
-
-                            //}
-                            //else
-                            //{
-                            //    Log("Final Sample error, get_status:  " + responseData + "  " + DateTime.Now);
-                            //    retry = 0;
-                            //    return;
-                            //}
                         }
                         if (button3.Text == "Open" & alarm & !msgSent)
                         {
@@ -464,35 +499,109 @@ namespace GarageMonitor2
                         }
 
 
-                    }
+                    } //end using
+
+                    //added for door 2
+                   if (useDoor2)
+                   {
+                        using (var response2 = await httpClient.GetAsync("commands/" + statusCommand2))
+                        {
+
+                            var responseData2 = await response2.Content.ReadAsStringAsync();
+                            root2 = JsonConvert.DeserializeObject<Rootobject>(responseData2);
+                            if (root2.status == "succeeded")
+                            {
+                                //Log("Response: " + root.response.level.ToString());
+                                if (root2.response.level == 100)
+                                {
+
+                                    if (button5.Text == "Open") //means it just closed
+                                    {
+                                        Log("Door2 CLOSED: " + DateTime.Now);
+                                        if (useLight)
+                                        {
+                                            timerLight.Start();
+                                            Log("Start Light delay timer:  " + DateTime.Now);
+                                        }
+                                        if (chime)
+                                        {
+                                            SoundPlayer simpleSound = new SoundPlayer(@"c:\Windows\Media\Windows Print complete.wav");
+                                            simpleSound.Play();
+                                            notifyIcon1.Visible = true;
+                                            notifyIcon1.ShowBalloonTip(11000, "Garage Monitor 2", "Garage Door Closed", ToolTipIcon.Info);
+                                        }
+                                    }
+                                    button5.Text = "Closed";
+                                    button5.BackColor = Color.Lime;
+                                    label23.Text = "";
+                                }
+                                //  else if (level == "100") //changed as API is backwards
+                                // else if (level == "0}}")
+                                if (root2.response.level == 0)
+                                {
+                                    button5.Text = "Open";
+                                    button5.BackColor = Color.Red;
+                                    label23.Text = "Push to Close";
+                                    if (useLight & !lightOn)
+                                    {
+                                        Thread.Sleep(500);
+                                        LightControl("on");
+                                        lightOn = true;
+                                    }
+                                    //             Log("Door OPEN: " + DateTime.Now);
+                                    //if (!msgSent & timer2.Enabled == false)
+                                    //    timer2.Start();
+                                    if (!msgSent & timer3.Enabled == false)  // first pass after opened
+                                    {
+                                        if (chime)
+                                        {
+                                            SoundPlayer simpleSound = new SoundPlayer(@"c:\Windows\Media\Windows Notify.wav");
+                                            simpleSound.Play();
+                                            notifyIcon1.Visible = true;
+                                            notifyIcon1.ShowBalloonTip(11000, "Garage Monitor 2", "Garage Door Open", ToolTipIcon.Info);
+                                        }
+                                        timer3.Start();
+                                        Log("Alarm Delay Start: " + DateTime.Now);
+                                    }
+                                }
+                            }
+                            else if (root2.status == "pending")
+                            {
+                                return;
+                            }
+                            else
+                            {
+                                Log("Sample error, get_status:  " + responseData2 + "  " + DateTime.Now);
+                            }
+                            if (button5.Text == "Open" & alarm & !msgSent)
+                            {
+                                timer3.Stop();
+                                AlarmMsg();
+                                Log("Alarm Timer Stopped: " + DateTime.Now);
+                            }
+                            if (button5.Text == "Closed" & msgSent)
+                                ResetMsg();
+                            if (button5.Text == "Closed" & !msgSent)
+                            {
+                                timer3.Stop();
+                            }
+
+                        } //end using
+                   } //end if usingdoor2
+
                 }
                 label2.BackColor = Color.Transparent;
                 label2.Text = "Status:";
+                if (useDoor2)
+                {
+                    label21.BackColor = Color.Transparent;
+                    label21.Text = "Status:";
+                }
                 // label13.BackColor = Color.Transparent;
             }
             catch (Exception ex)
             {
-                //if (retry < 3) // remd 11-2-17
-                //{
-                //    retry++;
-                //    Log("Sample Error: " + retry + " " + ex.ToString());
                 Log(DateTime.Now.ToString() +  "  Sample Error: " + ex.ToString());
-                
-
-                //}
-                //else
-                //{
-                // all remd 1-3-17, no need to spot the program for a sample error....just log and ignore
-             //   Log("Sample Error: " + retry + " " + ex.ToString());
-                  //  retry = 0;
-                    //DialogResult result = MessageBox.Show("Garage monitor has encountered and error.  Close and restart.", "Garage Monitor 2", MessageBoxButtons.AbortRetryIgnore);
-                    //if (result == DialogResult.Ignore)
-                    //    return;
-                    //if (result == DialogResult.Abort)
-                    //    Application.Exit();
-                    //if (result == DialogResult.Retry)
-                    //    Sample();
-               // }
             }
         }
 
@@ -628,6 +737,10 @@ namespace GarageMonitor2
         private int lightDelay;
         bool useLight;
         bool chime;
+        bool useDoor2;
+        private string statusCommand2;
+        private string statusCommand;
+
         private void Form1_Load(object sender, EventArgs e)
         {
             // timer2.Interval = 1000;
@@ -646,15 +759,18 @@ namespace GarageMonitor2
             textBox3.Text = GarageMonitor2.Properties.Settings.Default.InsteonPswd;
             textBox4.Text = GarageMonitor2.Properties.Settings.Default.device;
             textBox5.Text = GarageMonitor2.Properties.Settings.Default.lightDevice;
+            textBox9.Text = GarageMonitor2.Properties.Settings.Default.device2;
             numericUpDown2.Value = GarageMonitor2.Properties.Settings.Default.LightDelay;
             useLight = GarageMonitor2.Properties.Settings.Default.useLight;
             chime = GarageMonitor2.Properties.Settings.Default.chime;
+          //  useDoor2 = GarageMonitor2.Properties.Settings.Default.useDoor2;
             lightDevice = textBox5.Text;
             lightDelay = (int)numericUpDown2.Value;
             if (lightDelay == 0)
                 lightDelay = 1;
             timerLight.Interval = lightDelay * 60 * 1000;
             device = textBox4.Text;
+            device2 = textBox9.Text;
             if (useLight == true)
                 checkBox1.Checked = true;
             else
@@ -676,6 +792,18 @@ namespace GarageMonitor2
                 checkBox1LocalcAlarm.Checked = true;
             else
                 checkBox1LocalcAlarm.Checked = false;
+            if (GarageMonitor2.Properties.Settings.Default.useDoor2 == true)
+            {
+                checkBox5.Checked = true;
+                useDoor2 = true;
+            }
+            else
+            {
+                checkBox5.Checked = false;
+                useDoor2 = false;
+            }
+           
+              
             //timer2.Interval = delay * 60 * 1000;
             timer3.Interval = delay * 60 * 1000;
             Thread.Sleep(1000);
@@ -683,9 +811,18 @@ namespace GarageMonitor2
             //  button1.Focus();
             if (textBox2.Text != "" & textBox3.Text != "" & textBox4.Text != "") //autorun if all fields are filled. 
             {
-                Thread.Sleep(5000);
-                button1.PerformClick();
+                if (!useDoor2)
+                {
+                    Thread.Sleep(5000);
+                    button1.PerformClick();
+                }
+                if (useDoor2 & textBox9.Text != "")
+                {
+                    Thread.Sleep(5000);
+                    button1.PerformClick();
+                }
             }
+
 
         }
 
@@ -740,6 +877,8 @@ namespace GarageMonitor2
             GarageMonitor2.Properties.Settings.Default.LightDelay = (int)numericUpDown2.Value;
             GarageMonitor2.Properties.Settings.Default.useLight = checkBox1.Checked;
             GarageMonitor2.Properties.Settings.Default.chime = checkBox2.Checked;
+            GarageMonitor2.Properties.Settings.Default.device2 = textBox9.Text;
+            GarageMonitor2.Properties.Settings.Default.useDoor2 = useDoor2;
             GarageMonitor2.Properties.Settings.Default.Save();
             Application.ExitThread();
         }
@@ -807,45 +946,104 @@ namespace GarageMonitor2
             }
         }
 
-
+        bool confirmed1 = false;
+        bool confirmed2 = false;
         private async void ConfirmDevice()
         {
+
             try
             {
                 var baseAddress = new Uri("https://connect.insteon.com/api/v2/");
+               
                 using (var httpClient = new HttpClient { BaseAddress = baseAddress })
                 {
+                   
                     httpClient.DefaultRequestHeaders.TryAddWithoutValidation("authentication", "APIKey " + key);
                     httpClient.DefaultRequestHeaders.TryAddWithoutValidation("authorization", "Bearer " + token);
-                    using (var response = await httpClient.GetAsync("devices/" + device))
+                    if (!confirmed1)
                     {
-                        string responseData = await response.Content.ReadAsStringAsync();
-                        string test = responseData.Substring(2, 7);
-                        if (test == "HouseID")
+                        using (var response = await httpClient.GetAsync("devices/" + device))
                         {
-                            //System.IO.StreamWriter file = new System.IO.StreamWriter(path + "\\GM2log.txt", true);
-                            ////  System.IO.StreamWriter file = new System.IO.StreamWriter("c:\\users\\ksipp_000\\desktop\\token.txt", true);
-                            //file.WriteLine("Device Confirm: " + responseData);
-                            //file.Close();
-                            Log("Device Confirm: " + responseData);
-                            if (loggedIn)
+                            string responseData = await response.Content.ReadAsStringAsync();
+                            string test = responseData.Substring(2, 7);
+                            if (test == "HouseID")
                             {
-                                timer1.Enabled = true;
-                                Thread.Sleep(2000);
-                                Sample();
+                                //System.IO.StreamWriter file = new System.IO.StreamWriter(path + "\\GM2log.txt", true);
+                                ////  System.IO.StreamWriter file = new System.IO.StreamWriter("c:\\users\\ksipp_000\\desktop\\token.txt", true);
+                                //file.WriteLine("Device Confirm: " + responseData);
+                                //file.Close();
+                                Log("Device Confirm: " + responseData);
+                                confirmed1 = true;
+                                //if (loggedIn)
+                                //{
+                                //    timer1.Enabled = true;
+                                //    Thread.Sleep(2000);
+                                //    Sample();
+                                //}
+                                //else
+                                //    MessageBox.Show("Not Signed in", "Garage Monitor 2");
                             }
                             else
-                                MessageBox.Show("Not Signed in", "Garage Monitor 2");
-                        }
-                        else
-                        {
-                            MessageBox.Show("Invalid Deivce Code, Clear text, Sign in and find device code", "Garage Monitor 2");
-                            textBox4.Focus();
+                            {
+                                MessageBox.Show("Invalid Deivce Code, Clear text, Sign in and find device code", "Garage Monitor 2");
+                                textBox4.Focus();
 
+                            }
                         }
                     }
+                    //add for door 2
+                    if (useDoor2)
+                    {
+                        if (!confirmed2)
+                        {
+                            using (var response2 = await httpClient.GetAsync("devices/" + device2))
+                            {
+                                string responseData2 = await response2.Content.ReadAsStringAsync();
+                                string test2 = responseData2.Substring(2, 7);
+                                if (test2 == "HouseID")
+                                {
+                                    //System.IO.StreamWriter file = new System.IO.StreamWriter(path + "\\GM2log.txt", true);
+                                    ////  System.IO.StreamWriter file = new System.IO.StreamWriter("c:\\users\\ksipp_000\\desktop\\token.txt", true);
+                                    //file.WriteLine("Device Confirm: " + responseData);
+                                    //file.Close();
+                                    Log("Device Confirm: " + responseData2);
+                                    confirmed2 = true;
+                                    //if (loggedIn)
+                                    //{
+                                    //    timer1.Enabled = true;
+                                    //    Thread.Sleep(2000);
+                                    //    Sample();
+                                    //}
+                                    //else
+                                    //    MessageBox.Show("Not Signed in", "Garage Monitor 2");
+                                }
+                                else
+                                {
+                                    MessageBox.Show("Invalid Deivce Code, Clear text, Sign in and find device code", "Garage Monitor 2");
+                                    textBox9.Focus();
+
+                                }
+
+                            }
+                        }
+                    }
+                    
                 }
-            }
+                if (confirmed1 & confirmed2)
+                {
+                    if (loggedIn)
+                    {
+                        timer1.Enabled = true;
+                        Thread.Sleep(2000);
+                        Sample();
+                    }
+                    else
+                        MessageBox.Show("Not Signed in", "Garage Monitor 2");
+                }
+                else
+                    MessageBox.Show("Device confirmation error", "Garage Monitor 2");
+
+                }
             catch (Exception ex)
             {
                 Log("Confirm Device Error: " + ex.ToString());
@@ -859,21 +1057,27 @@ namespace GarageMonitor2
             if (loggedIn & textBox4.Text != "")
             {
                 device = textBox4.Text;
-                ConfirmDevice();
+                if (textBox9.Text != "") //dont confirm until both are full
+                    ConfirmDevice();
+                else
+                    textBox9.Focus();
 
             }
             else
             {
-                DialogResult result = MessageBox.Show("Sign in?", "Garage Monitor 2", MessageBoxButtons.YesNo);
-                if (result == DialogResult.Yes)
+                if (!loggedIn)
                 {
-                    if (textBox2.Text != "" || textBox3.Text != "")
-                        button1.PerformClick();
-                    else
-                        MessageBox.Show("Enter Username and/or password then click Sign in");
+                    DialogResult result = MessageBox.Show("Sign in?", "Garage Monitor 2", MessageBoxButtons.YesNo);
+                    if (result == DialogResult.Yes)
+                    {
+                        if (textBox2.Text != "" || textBox3.Text != "")
+                            button1.PerformClick();
+                        else
+                            MessageBox.Show("Enter Username and/or password then click Sign in");
+                    }
+                    if (result == DialogResult.No)
+                        return;
                 }
-                if (result == DialogResult.No)
-                    return;
             }
             return;
 
@@ -975,13 +1179,13 @@ namespace GarageMonitor2
 
         private void textBox5_KeyPress(object sender, KeyPressEventArgs e)
         {
+
             if (e.KeyChar == 13)
             {
                 e.Handled = true;
                 label2.Focus();
-
             }
-
+         
         }
 
         private void checkBox2_CheckedChanged(object sender, EventArgs e)
@@ -1063,6 +1267,68 @@ namespace GarageMonitor2
         {
             delay = (int)numericUpDown1.Value;
             timer3.Interval = delay * 60 * 1000;
+        }
+
+     
+
+        private void textBox9_Enter(object sender, EventArgs e)
+        {
+            if(useDoor2)
+            timer1.Enabled = false;
+        }
+
+        private void textBox9_KeyPress(object sender, KeyPressEventArgs e)
+        {
+            if (useDoor2)
+            {
+                if (e.KeyChar == 13)
+                {
+                    e.Handled = true;
+                    label21.Focus();
+
+                }
+            }
+        }
+
+        private void textBox9_Leave(object sender, EventArgs e)
+        {
+            if (useDoor2)
+            {
+                if (loggedIn & textBox9.Text != "")
+                {
+                    device2 = textBox9.Text;
+                    if (textBox4.Text != "") // dont confirm unless both are populated
+                        ConfirmDevice();
+                    else
+                        textBox4.Focus();
+
+                }
+                else
+                {
+                    if (!loggedIn)
+                    {
+                        DialogResult result = MessageBox.Show("Sign in?", "Garage Monitor 2", MessageBoxButtons.YesNo);
+                        if (result == DialogResult.Yes)
+                        {
+                            if (textBox2.Text != "" || textBox3.Text != "")
+                                button1.PerformClick();
+                            else
+                                MessageBox.Show("Enter Username and/or password then click Sign in");
+                        }
+                        if (result == DialogResult.No)
+                            return;
+                    }
+                }
+                return;
+            }
+        }
+
+        private void checkBox5_CheckedChanged(object sender, EventArgs e)
+        {
+            if (checkBox5.Checked)
+                useDoor2 = true;
+            else
+                useDoor2 = false;
         }
 
 
