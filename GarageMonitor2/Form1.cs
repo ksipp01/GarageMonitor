@@ -487,7 +487,7 @@ namespace GarageMonitor2
                         {
                             timer3.Stop();
                             alarmNumber = "1";
-                            AlarmMsg();
+                            AlarmMsg(1);
                             //  timer2.Stop();
                             //  timer2.Interval = delay * 60 * 1000;
                             Log("Alarm Timer Stopped: " + DateTime.Now);
@@ -495,7 +495,7 @@ namespace GarageMonitor2
                             // timer2.Interval = delay * 60 * 1000;
                         }
                         if (button3.Text == "Closed" & msgSent)
-                            ResetMsg();
+                            ResetMsg(1);
                         if (button3.Text == "Closed" & !msgSent)
                         {
                             timer3.Stop();
@@ -556,7 +556,7 @@ namespace GarageMonitor2
                                     //             Log("Door OPEN: " + DateTime.Now);
                                     //if (!msgSent & timer2.Enabled == false)
                                     //    timer2.Start();
-                                    if (!msgSent & timer4.Enabled == false)  // first pass after opened
+                                    if (!msgSent2 & timer4.Enabled == false)  // first pass after opened
                                     {
                                         if (chime)
                                         {
@@ -578,16 +578,16 @@ namespace GarageMonitor2
                             {
                                 Log("Sample error, get_status:  " + responseData2 + "  " + DateTime.Now);
                             }
-                            if (button5.Text == "Open" & alarm & !msgSent)
+                            if (button5.Text == "Open" & alarm & !msgSent2)
                             {
                                 timer4.Stop();
                                 alarmNumber = "2";
-                                AlarmMsg();
+                                AlarmMsg(2);
                                 Log("Alarm Timer Stopped: " + DateTime.Now);
                             }
-                            if (button5.Text == "Closed" & msgSent)
-                                ResetMsg();
-                            if (button5.Text == "Closed" & !msgSent)
+                            if (button5.Text == "Closed" & msgSent2)
+                                ResetMsg(2);
+                            if (button5.Text == "Closed" & !msgSent2)
                             {
                                 timer4.Stop();
                             }
@@ -659,7 +659,41 @@ namespace GarageMonitor2
 
         string alarmNumber;
         private bool msgSent = false;
-        private void AlarmMsg()
+        private bool msgSent2 = false;
+        //private void AlarmMsg()
+        //{
+
+        //    if (checkBox3SendText.Checked == true)
+        //    {
+        //        Send("Garage door" + alarmNumber + " has been open for " + numericUpDown1.Value.ToString() + " minutes");
+        //    }
+        //    if (localAlarm)
+        //    {
+        //        WindowState = FormWindowState.Normal;
+        //        SoundPlayer simpleSound = new SoundPlayer(@"c:\Windows\Media\Windows Background.wav");
+        //        simpleSound.Play();
+        //        //notifyIcon1.Icon = SystemIcons.Application;
+        //        //showBalloon("GarageMonitor", "the garage door is open");
+
+        //        //  notifyIcon1.Icon = SystemIcons.Application;
+        //        notifyIcon1.Visible = true;
+        //        notifyIcon1.ShowBalloonTip(11000, "Garage Monitor 2", "Garage Door Alarm", ToolTipIcon.Warning);
+        //        //  notifyIcon1.ShowBalloonTip(11000);
+
+        //    }
+        //    msgSent = true;
+        //    timerRepeat.Start();
+        //    //  Log("Repeat Timer started: " + DateTime.Now);
+        //    //System.IO.StreamWriter file = new System.IO.StreamWriter(path + "\\GM2log.txt", true);
+        //    ////    System.IO.StreamWriter file = new System.IO.StreamWriter("c:\\users\\ksipp_000\\desktop\\token.txt", true);
+        //    //file.WriteLine("Alarm activated: " + DateTime.Now);
+        //    //file.Close();
+        //    Log("Alarm activated/Repeat Timer started: " + DateTime.Now);
+        //    return;
+        //}
+        //   bool repeatSent = false;
+
+        private void AlarmMsg(int x)
         {
 
             if (checkBox3SendText.Checked == true)
@@ -680,7 +714,10 @@ namespace GarageMonitor2
                 //  notifyIcon1.ShowBalloonTip(11000);
 
             }
-            msgSent = true;
+            if (x == 1)
+                msgSent = true;
+            if (x == 2)
+                msgSent2 = true;
             timerRepeat.Start();
             //  Log("Repeat Timer started: " + DateTime.Now);
             //System.IO.StreamWriter file = new System.IO.StreamWriter(path + "\\GM2log.txt", true);
@@ -690,12 +727,16 @@ namespace GarageMonitor2
             Log("Alarm activated/Repeat Timer started: " + DateTime.Now);
             return;
         }
-        //   bool repeatSent = false;
-        private void ResetMsg()
+
+
+        private void ResetMsg(int x)
         {
             //send reset text
             Send("The garage door is now closed");
-            msgSent = false;
+            if (x==1) 
+                msgSent = false;
+            if (x==2) 
+                msgSent2 = false;
             alarm = false;
             timerRepeat.Stop();
             SoundPlayer simpleSound = new SoundPlayer(@"c:\Windows\Media\Windows Print complete.wav");
