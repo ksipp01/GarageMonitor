@@ -250,5 +250,89 @@ namespace GarageMonitor2.Properties {
                 this["useDoor2"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string city {
+            get {
+                return ((string)(this["city"]));
+            }
+            set {
+                this["city"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string state {
+            get {
+                return ((string)(this["state"]));
+            }
+            set {
+                this["state"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string heatDevice {
+            get {
+                return ((string)(this["heatDevice"]));
+            }
+            set {
+                this["heatDevice"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool controlHeat {
+            get {
+                return ((bool)(this["controlHeat"]));
+            }
+            set {
+                this["controlHeat"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("1")]
+        public int heatHoldTime {
+            get {
+                return ((int)(this["heatHoldTime"]));
+            }
+            set {
+                this["heatHoldTime"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string zip {
+            get {
+                return ((string)(this["zip"]));
+            }
+            set {
+                this["zip"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string apiToken {
+            get {
+                return ((string)(this["apiToken"]));
+            }
+            set {
+                this["apiToken"] = value;
+            }
+        }
     }
 }

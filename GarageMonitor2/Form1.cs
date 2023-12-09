@@ -16,7 +16,9 @@ using System.Media;
 using System.Timers;
 using System.Diagnostics;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using System.Net;
+
 
 
 namespace GarageMonitor2
@@ -40,7 +42,12 @@ namespace GarageMonitor2
             timerLight = new System.Timers.Timer(6000);
             timerLight.Elapsed += new ElapsedEventHandler(OnTimedLightEvent);
             timerLight.AutoReset = true;
-
+            timerHeatHold = new System.Timers.Timer(3600000);
+            timerHeatHold.Elapsed += new ElapsedEventHandler(OnTimedHeatEvent);
+            timerHeatHold.AutoReset = true;
+            //timerGetWeather = new System.Timers.Timer(60000);//check weather every 10 min (600000)
+            //timerGetWeather.Elapsed += new ElapsedEventHandler(OnTimedgetWeatherEvent);
+            //timerGetWeather.AutoReset = true;
         }
         public string token;
         public string refresh;
@@ -50,9 +57,30 @@ namespace GarageMonitor2
         private static System.Timers.Timer timer4;
         private static System.Timers.Timer timerRepeat;
         private static System.Timers.Timer timerLight;
+        private static System.Timers.Timer timerHeatHold;
+     //   private static System.Timers.Timer timerGetWeather;
 
-
-
+        string city;
+        string state;
+        bool RunAtStart;
+        bool localAlarm;
+        string lightDevice;
+        public int delay;
+        private int lightDelay;
+        bool useLight;
+        bool chime;
+        bool useDoor2;
+        private string statusCommand2;
+        private string statusCommand;
+        private string statusCommand3;
+        private string heatDevice;
+        private bool controlHeat;
+        private string zip;
+        private string apiToken;
+        private string cond;
+        private double temp;
+        private int heatHoldTime;
+        private bool itSnowed = false;
 
         private string key = "9431011e-cd50-4c48-9e8b-1b3ce77b6b2c1455000279.8938910323";
 
@@ -72,7 +100,14 @@ namespace GarageMonitor2
         {
             return textBox6To.Text;
         }
-
+        public string State()
+        {
+            return textBox13.Text;
+        }
+        public string City()
+        {
+            return textBox12.Text;
+        }
         bool sendText;
         string device;
         string device2;
@@ -114,11 +149,16 @@ namespace GarageMonitor2
                         string responseData = await response.Content.ReadAsStringAsync();
                         //   MessageBox.Show(responseData);
 
-                        List<string> keyValuePairs = responseData.Split(':').ToList();
-                        int index = keyValuePairs[1].IndexOf(",") - 2;
-                        token = keyValuePairs[1].Substring(1, keyValuePairs[1].Length - (keyValuePairs[1].Length - index));
-                        refresh = keyValuePairs[2].Substring(1, keyValuePairs[2].Length - (keyValuePairs[2].Length - index));
-                        int expTime = Convert.ToInt16(keyValuePairs[4].Substring(0, 4));
+                        JObject o = JObject.Parse(responseData);
+                        token = (string)o["access_token"];
+                        refresh = (string)o["refresh_token"];
+                        int expTime = Convert.ToInt16(o["expires_in"]);
+
+                        //List<string> keyValuePairs = responseData.Split(':').ToList();
+                        //int index = keyValuePairs[1].IndexOf(",") - 2;
+                        //token = keyValuePairs[1].Substring(1, keyValuePairs[1].Length - (keyValuePairs[1].Length - index));
+                        //refresh = keyValuePairs[2].Substring(1, keyValuePairs[2].Length - (keyValuePairs[2].Length - index));
+                        //int expTime = Convert.ToInt16(keyValuePairs[4].Substring(0, 4));
                         start = DateTime.Now;
                         expire = start.AddMinutes(expTime - 60);
                         // System.IO.StreamWriter file = new System.IO.StreamWriter(path + "\\GM2log.txt", true);
@@ -167,12 +207,18 @@ namespace GarageMonitor2
                         string responseData = await response.Content.ReadAsStringAsync();
                         //    MessageBox.Show(responseData);
 
-                        List<string> keyValuePairs = responseData.Split(':').ToList();
+                        JObject o = JObject.Parse(responseData);
+                        token = (string)o["access_token"];
+                        refresh = (string)o["refresh_token"];
+                        int expTime = Convert.ToInt16(o["expires_in"]);
+                        
+                        
+                        //List<string> keyValuePairs = responseData.Split(':').ToList();
 
-                        int index = keyValuePairs[1].IndexOf(",") - 2;
-                        token = keyValuePairs[1].Substring(1, keyValuePairs[1].Length - (keyValuePairs[1].Length - index));
-                        refresh = keyValuePairs[2].Substring(1, keyValuePairs[2].Length - (keyValuePairs[2].Length - index));
-                        int expTime = Convert.ToInt16(keyValuePairs[4].Substring(0, 4));
+                        //int index = keyValuePairs[1].IndexOf(",") - 2;
+                        //token = keyValuePairs[1].Substring(1, keyValuePairs[1].Length - (keyValuePairs[1].Length - index));
+                        //refresh = keyValuePairs[2].Substring(1, keyValuePairs[2].Length - (keyValuePairs[2].Length - index));
+                        //int expTime = Convert.ToInt16(keyValuePairs[4].Substring(0, 4));
                         start = DateTime.Now;
                         expire = start.AddMinutes(expTime - 60);
                         if (token.Length == 32)
@@ -212,9 +258,8 @@ namespace GarageMonitor2
                         using (var response = await httpClient.GetAsync("devices"))
                         {
 
-                            string responseData = await response.Content.ReadAsStringAsync();
-                            // MessageBox.Show(responseData);
-                            MessageBox.Show(responseData, "Find Device number and enter in Text Box");
+                                string responseData = await response.Content.ReadAsStringAsync();
+                               MessageBox.Show(responseData, "Find Device number and enter in Text Box");
                             //System.IO.StreamWriter file = new System.IO.StreamWriter(path + "\\GM2log.txt", true);
                             ////  System.IO.StreamWriter file = new System.IO.StreamWriter("c:\\users\\ksipp_000\\desktop\\token.txt", true);
                             //file.WriteLine("Devices: " + responseData);
@@ -314,7 +359,139 @@ namespace GarageMonitor2
             public int level { get; set; }
         }
 
-        private async void Sample()
+
+        Stopwatch stopwatch = new Stopwatch();
+
+        private async Task GetWeather()
+        {
+            try
+            {
+                //   var baseAddress = new Uri("http://api.weatherapi.com/v1/");
+                var url = "http://api.weatherapi.com/v1/" + "current.json?key=" + apiToken + "&q=" + zip + "&aqi=no";
+                //  using (var httpClient2 = new HttpClient { BaseAddress = baseAddress })
+                using (var httpClient2 = new HttpClient())
+                {
+                    //  using (var content = new StringContent("/current.json?key=" + apiToken + "&q=" + zip + "&aqi=no"))
+                    // {
+
+                    var response = await httpClient2.GetAsync(url);
+                    var responseString = await response.Content.ReadAsStringAsync();
+
+                    JObject o = JObject.Parse(responseString);
+
+
+                    //   var httpResponse = (HttpWebResponse)httpRequest.GetResponse();
+                    //    using (var streamReader = new StreamReader(response.GetResponseStream()))
+                    //   using (var streamReader = new StreamReader(httpResponse.GetResponseStream()))
+
+                    //   var result = streamReader.ReadToEnd();
+                    //   JObject o = JObject.Parse(result);
+                    //  JArray weather = (JArray)o["weather"];
+                    //   cond = (string)weather[0]["main"];
+                    cond = (string)o["current"]["condition"]["text"];
+                    string t = (string)o["current"]["temp_f"];
+                    temp = Convert.ToDouble(t);
+                    //  temp = (int)((Convert.ToDouble(t) - 273.15) * 9 / 5 + 32);
+                    //textBox10.Text = cond;
+                    //textBox14.Text = temp.ToString();
+                    //                SetTextbox10(cond);
+                    //                SetTextbox14(temp.ToString());
+
+
+                    if ((cond.Contains("now")) && (!itSnowed))
+                        itSnowed = true;
+                    if (!(cond.Contains("now")) && (itSnowed))
+                    {
+                        timerHeatHold.Start();
+                        stopwatch.Start();
+                        itSnowed = false;
+                        label28.BackColor = Color.Red;
+
+                    }
+
+                }
+                if (stopwatch.IsRunning)
+                {
+
+                    //  SetTextbox17(((((heatHoldTime * 3600000) - (stopwatch.ElapsedMilliseconds)) / 3600000)+1).ToString());
+                    textBox17.Text = (((((heatHoldTime * 3600000) - (stopwatch.ElapsedMilliseconds)) / 3600000) + 1).ToString());
+
+                }
+                textBox10.Text = cond;
+                textBox14.Text = temp.ToString();
+                //this.Refresh();
+            }
+            catch (Exception ex)
+            {
+                Log(DateTime.Now.ToString() + "  Sample Error: " + ex.ToString());
+            }
+
+
+
+        }
+
+
+
+
+        //delegate void SetTextCallback(string text);
+        //private void SetTextbox10(string text)
+        //{
+        //    // InvokeRequired required compares the thread ID of the
+        //    // calling thread to the thread ID of the creating thread.
+        //    // If these threads are different, it returns true.
+        //    if (this.textBox10.InvokeRequired)
+        //    {
+        //        SetTextCallback d = new SetTextCallback(SetTextbox10);
+        //        this.Invoke(d, new object[] { text });
+        //    }
+        //    else
+        //    {
+        //        this.textBox10.Text = text;
+        //    }
+        //}
+        //private void SetTextbox14(string text)
+        //{
+        //    // InvokeRequired required compares the thread ID of the
+        //    // calling thread to the thread ID of the creating thread.
+        //    // If these threads are different, it returns true.
+        //    if (this.textBox14.InvokeRequired)
+        //    {
+        //        SetTextCallback d = new SetTextCallback(SetTextbox14);
+        //        this.Invoke(d, new object[] { text });
+        //    }
+        //    else
+        //    {
+        //        this.textBox14.Text = text;
+        //    }
+        //}
+        //private void SetTextbox17(string text)
+        //{
+        //    // InvokeRequired required compares the thread ID of the
+        //    // calling thread to the thread ID of the creating thread.
+        //    // If these threads are different, it returns true.
+        //    if (this.textBox17.InvokeRequired)
+        //    {
+        //        SetTextCallback d = new SetTextCallback(SetTextbox17);
+        //        this.Invoke(d, new object[] { text });
+        //    }
+        //    else
+        //    {
+        //        this.textBox17.Text = text;
+        //    }
+        //}
+
+        // private void Refresh()
+        //{
+        //    if (stopwatch.IsRunning)
+        //    textBox17.Text = (((((heatHoldTime * 3600000) - (stopwatch.ElapsedMilliseconds)) / 3600000) + 1).ToString());
+
+        //    textBox10.Text = cond;
+        //    textBox14.Text = temp.ToString();
+        //}
+
+
+
+        private async Task Sample()
         {
             Rootobject root;
             Rootobject root2;
@@ -326,6 +503,9 @@ namespace GarageMonitor2
 
             try
             {
+
+               
+
 
                 var baseAddress = new Uri("https://connect.insteon.com/api/v2/");
                 using (var httpClient = new HttpClient { BaseAddress = baseAddress })
@@ -340,6 +520,7 @@ namespace GarageMonitor2
                         label21.BackColor = Color.Yellow;
                         label21.Text = "Polling";
                     }
+                    
                     httpClient.DefaultRequestHeaders.TryAddWithoutValidation("http", "//docs.insteon.apiary.io/");
                     httpClient.DefaultRequestHeaders.TryAddWithoutValidation("authentication", "APIKey " + key);
                     httpClient.DefaultRequestHeaders.TryAddWithoutValidation("authorization", "Bearer " + token);
@@ -347,31 +528,40 @@ namespace GarageMonitor2
                     //  using (var content = new StringContent("{  \"command\": \"get_status\",  \"device_id\": " + device + "}", System.Text.Encoding.Default, "application/json"))  prev of for lights
                     using (var content = new StringContent("{  \"command\": \"get_sensor_status\",  \"device_id\": " + device + "}", System.Text.Encoding.Default, "application/json"))
                     {
-                        using (var response = await httpClient.PostAsync("commands", content))
+                       
+                     using (var response = await httpClient.PostAsync("commands", content))
                         {
-                            
-                            string responseData = await response.Content.ReadAsStringAsync();
-                            //  MessageBox.Show(responseData);
-                            List<string> keyValuePairs = responseData.Split(':').ToList();
-                            if (keyValuePairs.Count > 3) // fixes list index error if it's zero it will hang
-                            {
-                                statusCommand = keyValuePairs[3].Substring(0, keyValuePairs[3].Length - 1);
-                            }
-                            else
-                            {
-                                Log("statusCommand error: keyValuePair.Count = " + keyValuePairs.Count.ToString());
-                                for (int i = 0; i < keyValuePairs.Count + 1; i++)
-                                {
-                                    Log("keyValuePairs[" + i.ToString() + "]= " + keyValuePairs[i].ToString());
-                                    if (keyValuePairs[i].Contains("The access key has expired") == true) // this may not be needed since changing line 238 
-                                    {
-                                        RefreshToken();
-                                        return;
-                                        }
-                                }
 
+                            string responseData = await response.Content.ReadAsStringAsync();
+                            JObject o = JObject.Parse(responseData);
+                            string result = (string)o["status"];
+                            if (result != "pending")
+                            {
+                                RefreshToken();
                                 return;
                             }
+                            else
+                                statusCommand = (string)o["id"]; 
+                            //List<string> keyValuePairs = responseData.Split(':').ToList();
+                            //if (keyValuePairs.Count > 3) // fixes list index error if it's zero it will hang
+                            //{
+                            //    statusCommand = keyValuePairs[3].Substring(0, keyValuePairs[3].Length - 1);
+                            //}
+                            //else
+                            //{
+                            //    Log("statusCommand error: keyValuePair.Count = " + keyValuePairs.Count.ToString());
+                            //    for (int i = 0; i < keyValuePairs.Count + 1; i++)
+                            //    {
+                            //        Log("keyValuePairs[" + i.ToString() + "]= " + keyValuePairs[i].ToString());
+                            //        if (keyValuePairs[i].Contains("The access key has expired") == true) // this may not be needed since changing line 238 
+                            //        {
+                            //            RefreshToken();
+                            //            return;
+                            //        }
+                            //    }
+
+                            //    return;
+                            //}
 
                         }
                     }
@@ -385,144 +575,255 @@ namespace GarageMonitor2
                             {
 
                                 string responseData2 = await response2.Content.ReadAsStringAsync();
-                                //  MessageBox.Show(responseData);
-                                List<string> keyValuePairs = responseData2.Split(':').ToList();
-                                if (keyValuePairs.Count > 3) // fixes list index error if it's zero it will hang
-                                {
-                                    statusCommand2 = keyValuePairs[3].Substring(0, keyValuePairs[3].Length - 1);
-                                }
-                                else
-                                {
-                                    Log("statusCommand2 error: keyValuePair.Count = " + keyValuePairs.Count.ToString());
-                                    for (int i = 0; i < keyValuePairs.Count + 1; i++)
-                                    {
-                                        Log("keyValuePairs[" + i.ToString() + "]= " + keyValuePairs[i].ToString());
-                                        if (keyValuePairs[i].Contains("The access key has expired") == true) // this may not be needed since changing line 238 
-                                        {
-                                            RefreshToken();
-                                            return;
-                                        }
-                                    }
 
+                                JObject o = JObject.Parse(responseData2);
+                                string result = (string)o["status"];
+                                if (result != "pending")
+                                {
+                                    RefreshToken();
                                     return;
                                 }
+                                else
+                                statusCommand2 = (string)o["id"];
+
+                                //  MessageBox.Show(responseData);
+                                //List<string> keyValuePairs = responseData2.Split(':').ToList();
+                                //if (keyValuePairs.Count > 3) // fixes list index error if it's zero it will hang
+                                //{
+                                //    statusCommand2 = keyValuePairs[3].Substring(0, keyValuePairs[3].Length - 1);
+                                //}
+                                //else
+                                //{
+                                //    Log("statusCommand2 error: keyValuePair.Count = " + keyValuePairs.Count.ToString());
+                                //    for (int i = 0; i < keyValuePairs.Count + 1; i++)
+                                //    {
+                                //        Log("keyValuePairs[" + i.ToString() + "]= " + keyValuePairs[i].ToString());
+                                //        if (keyValuePairs[i].Contains("The access key has expired") == true) // this may not be needed since changing line 238 
+                                //        {
+                                //            RefreshToken();
+                                //            return;
+                                //        }
+                                //    }
+
+                                //    return;
+                                //}
 
                             }
                         }
                     }
 
+                    //add heatcontrol
+                    // get weather
+                    //  GetWeather();   moved to q 10 min timer 
+
+                    //var url = "http://api.weatherapi.com/v1/current.json?key=" + apiToken + "&q=" + zip + "&aqi=no";
+                    //var httpRequest = (HttpWebRequest)WebRequest.Create(url);
+                    //httpRequest.Accept = "application/json";
 
 
-                    Thread.Sleep(1500);
-                    using (var response = await httpClient.GetAsync("commands/" + statusCommand))
-                    {
+                    //var httpResponse = (HttpWebResponse)httpRequest.GetResponse();
+                    //using (var streamReader = new StreamReader(httpResponse.GetResponseStream()))
+                    //{
+                    //    var result = streamReader.ReadToEnd();
+                    //    JObject o = JObject.Parse(result);
+                    //    //  JArray weather = (JArray)o["weather"];
+                    //    //   cond = (string)weather[0]["main"];
+                    //    cond = (string)o["current"]["condition"]["text"];
+                    //    string t = (string)o["current"]["temp_f"];
+                    //    temp = Convert.ToDouble(t);
+                    //    //  temp = (int)((Convert.ToDouble(t) - 273.15) * 9 / 5 + 32);
+                    //    textBox10.Text = cond;
+                    //    textBox14.Text = temp.ToString();
+                    //}
 
-                        var responseData = await response.Content.ReadAsStringAsync(); // was string
-                        root = JsonConvert.DeserializeObject<Rootobject>(responseData);
-                        if (root.status == "succeeded")
+                    //if ((cond == "Snow") && (!itSnowed))
+                    //    itSnowed = true;
+                    //if ((cond != "Snow") && (itSnowed))
+                    //{
+                    //    timerHeatHold.Start();
+                    //    itSnowed = false;
+                    //    stopwatch.Start();
+                    //    label28.BackColor = Color.Red;
+                    //}
+
+
+
+
+
+
+                  //  readd getweather
+
+                    //var url = "http://api.weatherapi.com/v1/" + "current.json?key=" + apiToken + "&q=" + zip + "&aqi=no";
+                    ////  using (var httpClient2 = new HttpClient { BaseAddress = baseAddress })
+                    //using (var httpClient2 = new HttpClient())
+                    //{
+                    //    //  using (var content = new StringContent("/current.json?key=" + apiToken + "&q=" + zip + "&aqi=no"))
+                    //    // {
+
+                    //    var response = await httpClient2.GetAsync(url);
+                    //    var responseString = await response.Content.ReadAsStringAsync();
+
+                    //    JObject o = JObject.Parse(responseString);
+
+
+                    //    //   var httpResponse = (HttpWebResponse)httpRequest.GetResponse();
+                    //    //    using (var streamReader = new StreamReader(response.GetResponseStream()))
+                    //    //   using (var streamReader = new StreamReader(httpResponse.GetResponseStream()))
+
+                    //    //   var result = streamReader.ReadToEnd();
+                    //    //   JObject o = JObject.Parse(result);
+                    //    //  JArray weather = (JArray)o["weather"];
+                    //    //   cond = (string)weather[0]["main"];
+                    //    cond = (string)o["current"]["condition"]["text"];
+                    //    string t = (string)o["current"]["temp_f"];
+                    //    temp = Convert.ToDouble(t);
+                    //    //  temp = (int)((Convert.ToDouble(t) - 273.15) * 9 / 5 + 32);
+                    //    //textBox10.Text = cond;
+                    //    //textBox14.Text = temp.ToString();
+                    //    //                SetTextbox10(cond);
+                    //    //                SetTextbox14(temp.ToString());
+
+
+                    //    if ((cond.Contains("now")) && (!itSnowed))
+                    //        itSnowed = true;
+                    //    if (!(cond.Contains("now")) && (itSnowed))
+                    //    {
+                    //        timerHeatHold.Start();
+                    //        stopwatch.Start();
+                    //        itSnowed = false;
+                    //        label28.BackColor = Color.Red;
+
+                    //    }
+
+                    //}
+                    //if (stopwatch.IsRunning)
+                    //{
+
+                    //    //  SetTextbox17(((((heatHoldTime * 3600000) - (stopwatch.ElapsedMilliseconds)) / 3600000)+1).ToString());
+                    //    textBox17.Text = (((((heatHoldTime * 3600000) - (stopwatch.ElapsedMilliseconds)) / 3600000) + 1).ToString());
+
+                    //}
+                    //textBox10.Text = cond;
+                    //textBox14.Text = temp.ToString();
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    //var url = "http://api.openweathermap.org/data/2.5/weather?q=" + city + ",US-" + state + "&appid=ae6d72e84ba901de276141a6b8c8895b";
+                    //var httpRequest = (HttpWebRequest)WebRequest.Create(url);
+                    //httpRequest.Accept = "application/json";
+
+                    //var httpResponse = (HttpWebResponse)httpRequest.GetResponse();
+                    //using (var streamReader = new StreamReader(httpResponse.GetResponseStream()))
+                    //{
+                    //    var result = streamReader.ReadToEnd();
+                    //    JObject o = JObject.Parse(result);
+                    //    JArray weather = (JArray)o["weather"];
+                    //    cond = (string)weather[0]["main"];
+                    //    string t = (string)o["main"]["temp"];
+                    //    temp =(int)((Convert.ToDouble(t) - 273.15) * 9 / 5 + 32);
+                    //    textBox10.Text = cond;
+                    //    textBox14.Text = temp.ToString();
+                    //}                 
+
+                    //if ((cond == "Snow") && (!itSnowed))
+                    //    itSnowed = true;
+                    //if ((cond != "Snow") && (itSnowed))
+                    //{
+                    //    timerHeatHold.Start();
+                    //    itSnowed = false;
+                    //}
+                    // ednd weather
+
+
+                    if (controlHeat)
                         {
-                            //Log("Response: " + root.response.level.ToString());
-                            if (root.response.level == 100)
+                            using (var content3 = new StringContent("{  \"command\": \"get_status\",  \"device_id\": " + heatDevice + "}", System.Text.Encoding.Default, "application/json"))
+                            {
+                                using (var response3 = await httpClient.PostAsync("commands", content3))
+                                {
+                                    string responseData3 = await response3.Content.ReadAsStringAsync();
+                                    JObject o = JObject.Parse(responseData3);
+                                    statusCommand3 = (string)o["id"];
+                                    Thread.Sleep(1500);
+                                }
+                            }
+                        }
+
+
+                        if (controlHeat)
+                        {
+                            using (var response3 = await httpClient.GetAsync("commands/" + statusCommand3))
                             {
 
-                                if (button3.Text == "Open") //means it just closed
-                                {
-                                    Log("Door CLOSED: " + DateTime.Now);
-                                    if (useLight)
-                                    {
-                                        timerLight.Start();
-                                        Log("Start Light delay timer:  " + DateTime.Now);
-                                    }
-                                    if (chime)
-                                    {
-                                        SoundPlayer simpleSound = new SoundPlayer(@"c:\Windows\Media\Windows Print complete.wav");
-                                        simpleSound.Play();
-                                        notifyIcon1.Visible = true;
-                                        notifyIcon1.ShowBalloonTip(11000, "Garage Monitor 2", "Garage Door2 Closed", ToolTipIcon.Info);
-                                    }
-                                }
-                                button3.Text = "Closed";
-                                button3.BackColor = Color.Lime;
-                                label1.Text = "";
-                            }
-                            //  else if (level == "100") //changed as API is backwards
-                            // else if (level == "0}}")
-                            if (root.response.level == 0)
-                            {
-                                button3.Text = "Open";
-                                button3.BackColor = Color.Red;
-                                label1.Text = "Push to Close";
-                                if (useLight & !lightOn)
-                                {
-                                    Thread.Sleep(500);
-                                    LightControl("on");
-                                    lightOn = true;
-                                }
-                   //             Log("Door OPEN: " + DateTime.Now);
-                                //if (!msgSent & timer2.Enabled == false)
-                                //    timer2.Start();
-                                if (!msgSent & timer3.Enabled == false)  // first pass after opened
-                                {
-                                    if (chime)
-                                    {
-                                        SoundPlayer simpleSound = new SoundPlayer(@"c:\Windows\Media\Windows Notify.wav");
-                                        simpleSound.Play();
-                                        notifyIcon1.Visible = true;
-                                        notifyIcon1.ShowBalloonTip(11000, "Garage Monitor 2", "Garage Door2 Open", ToolTipIcon.Info);
-                                    }
-                                    timer3.Start();
-                                    Log("Alarm Delay Start: " + DateTime.Now);
-                                }
-                            }
-                        }
-                       else if (root.status == "pending")
-                        {
-                            return;
-                        }
-                        else
-                        {                   
-                            Log("Sample error, get_status:  " + responseData + "  " + DateTime.Now);
-                        }
-                        if (button3.Text == "Open" & alarm & !msgSent)
-                        {
-                            timer3.Stop();
-                            alarmNumber = "1";
-                            AlarmMsg(1);
-                            //  timer2.Stop();
-                            //  timer2.Interval = delay * 60 * 1000;
-                            Log("Alarm Timer Stopped: " + DateTime.Now);
-
-                            // timer2.Interval = delay * 60 * 1000;
-                        }
-                        if (button3.Text == "Closed" & msgSent)
-                            ResetMsg(1);
-                        if (button3.Text == "Closed" & !msgSent)
-                        {
-                            timer3.Stop();
-
-
-                        }
-
-
-                    } //end using
-
-                    //added for door 2
-                   if (useDoor2)
-                   {
-                        using (var response2 = await httpClient.GetAsync("commands/" + statusCommand2))
-                        {
-
-                            var responseData2 = await response2.Content.ReadAsStringAsync();
-                            root2 = JsonConvert.DeserializeObject<Rootobject>(responseData2);
+                                var responseData3 = await response3.Content.ReadAsStringAsync();
+                                root2 = JsonConvert.DeserializeObject<Rootobject>(responseData3);
                             if (root2.status == "succeeded")
                             {
+                                {
+                                    //Log("Response: " + root.response.level.ToString());
+                                    if (root2.response.level == 100) // the heater is on...nothing to do.  
+                                    {
+                                        button6.Text = "Heat ON";
+                                        button6.BackColor = Color.Red;
+                                        if (temp > 36)
+                                        {
+                                            HeaterControl("off");
+                                            Log("temp > 36, Heater turned off");
+                                            Send("temp > 36, Heater turned off");
+                                            timerHeatHold.Stop();
+                                            stopwatch.Stop();
+                                            stopwatch.Reset();
+                                            label28.BackColor = Color.Transparent;
+                                        }
+
+                                    }
+                                }
+                                if (root2.response.level == 0) // no effect if manaully turned on
+                                {
+                                    button6.Text = "Heat";
+                                    button6.BackColor = Color.Lime;
+                                    if ((cond.Contains("now")) && (temp < 32))  // allows for S or s without explicitly denoting it
+                                    {
+                                        HeaterControl("on");
+                                        Log("Heat on at " + DateTime.Now + " Temp = " + temp + " condition: " + cond);
+                                      //  Send("Temp = " + temp + " condition: " + cond + " The Heater turned on"); //rem'd 12/23/2022 no need for middle of thie night notification
+
+                                    }
+                                }
+                            }
+
+                            }
+
+
+                            //end add heat control
+
+                        }
+
+                        Thread.Sleep(1500);
+                        using (var response = await httpClient.GetAsync("commands/" + statusCommand))
+                        {
+
+                            var responseData = await response.Content.ReadAsStringAsync(); // was string
+                            root = JsonConvert.DeserializeObject<Rootobject>(responseData);
+                            if (root.status == "succeeded")
+                            {
                                 //Log("Response: " + root.response.level.ToString());
-                                if (root2.response.level == 100)
+                                if (root.response.level == 100)
                                 {
 
-                                    if (button5.Text == "Open") //means it just closed
+                                    if (button3.Text == "Open") //means it just closed
                                     {
-                                        Log("Door2 CLOSED: " + DateTime.Now);
+                                        Log("Door CLOSED: " + DateTime.Now);
                                         if (useLight)
                                         {
                                             timerLight.Start();
@@ -536,17 +837,17 @@ namespace GarageMonitor2
                                             notifyIcon1.ShowBalloonTip(11000, "Garage Monitor 2", "Garage Door2 Closed", ToolTipIcon.Info);
                                         }
                                     }
-                                    button5.Text = "Closed";
-                                    button5.BackColor = Color.Lime;
-                                    label23.Text = "";
+                                    button3.Text = "Closed";
+                                    button3.BackColor = Color.Lime;
+                                    label1.Text = "";
                                 }
                                 //  else if (level == "100") //changed as API is backwards
                                 // else if (level == "0}}")
-                                if (root2.response.level == 0)
+                                if (root.response.level == 0)
                                 {
-                                    button5.Text = "Open";
-                                    button5.BackColor = Color.Red;
-                                    label23.Text = "Push to Close";
+                                    button3.Text = "Open";
+                                    button3.BackColor = Color.Red;
+                                    label1.Text = "Push to Close";
                                     if (useLight & !lightOn)
                                     {
                                         Thread.Sleep(500);
@@ -556,7 +857,7 @@ namespace GarageMonitor2
                                     //             Log("Door OPEN: " + DateTime.Now);
                                     //if (!msgSent & timer2.Enabled == false)
                                     //    timer2.Start();
-                                    if (!msgSent2 & timer4.Enabled == false)  // first pass after opened
+                                    if (!msgSent & timer3.Enabled == false)  // first pass after opened
                                     {
                                         if (chime)
                                         {
@@ -565,37 +866,132 @@ namespace GarageMonitor2
                                             notifyIcon1.Visible = true;
                                             notifyIcon1.ShowBalloonTip(11000, "Garage Monitor 2", "Garage Door2 Open", ToolTipIcon.Info);
                                         }
-                                        timer4.Start();
+                                        timer3.Start();
                                         Log("Alarm Delay Start: " + DateTime.Now);
                                     }
                                 }
                             }
-                            else if (root2.status == "pending")
+                            else if (root.status == "pending")
                             {
                                 return;
                             }
                             else
                             {
-                                Log("Sample error, get_status:  " + responseData2 + "  " + DateTime.Now);
+                                Log("Sample error, get_status:  " + responseData + "  " + DateTime.Now);
                             }
-                            if (button5.Text == "Open" & alarm & !msgSent2)
+                            if (button3.Text == "Open" & alarm & !msgSent)
                             {
-                                timer4.Stop();
-                                alarmNumber = "2";
-                                AlarmMsg(2);
+                                timer3.Stop();
+                                alarmNumber = "1";
+                                AlarmMsg(1);
+                                //  timer2.Stop();
+                                //  timer2.Interval = delay * 60 * 1000;
                                 Log("Alarm Timer Stopped: " + DateTime.Now);
+
+                                // timer2.Interval = delay * 60 * 1000;
                             }
-                            if (button5.Text == "Closed" & msgSent2)
-                                ResetMsg(2);
-                            if (button5.Text == "Closed" & !msgSent2)
+                            if (button3.Text == "Closed" & msgSent)
+                                ResetMsg(1);
+                            if (button3.Text == "Closed" & !msgSent)
                             {
-                                timer4.Stop();
+                                timer3.Stop();
+
+
                             }
+
 
                         } //end using
-                   } //end if usingdoor2
 
-                }
+                        //added for door 2
+                        if (useDoor2)
+                        {
+                            using (var response2 = await httpClient.GetAsync("commands/" + statusCommand2))
+                            {
+
+                                var responseData2 = await response2.Content.ReadAsStringAsync();
+                                root2 = JsonConvert.DeserializeObject<Rootobject>(responseData2);
+                                if (root2.status == "succeeded")
+                                {
+                                    //Log("Response: " + root.response.level.ToString());
+                                    if (root2.response.level == 100)
+                                    {
+
+                                        if (button5.Text == "Open") //means it just closed
+                                        {
+                                            Log("Door2 CLOSED: " + DateTime.Now);
+                                            if (useLight)
+                                            {
+                                                timerLight.Start();
+                                                Log("Start Light delay timer:  " + DateTime.Now);
+                                            }
+                                            if (chime)
+                                            {
+                                                SoundPlayer simpleSound = new SoundPlayer(@"c:\Windows\Media\Windows Print complete.wav");
+                                                simpleSound.Play();
+                                                notifyIcon1.Visible = true;
+                                                notifyIcon1.ShowBalloonTip(11000, "Garage Monitor 2", "Garage Door2 Closed", ToolTipIcon.Info);
+                                            }
+                                        }
+                                        button5.Text = "Closed";
+                                        button5.BackColor = Color.Lime;
+                                        label23.Text = "";
+                                    }
+                                    //  else if (level == "100") //changed as API is backwards
+                                    // else if (level == "0}}")
+                                    if (root2.response.level == 0)
+                                    {
+                                        button5.Text = "Open";
+                                        button5.BackColor = Color.Red;
+                                        label23.Text = "Push to Close";
+                                        if (useLight & !lightOn)
+                                        {
+                                            Thread.Sleep(500);
+                                            LightControl("on");
+                                            lightOn = true;
+                                        }
+                                        //             Log("Door OPEN: " + DateTime.Now);
+                                        //if (!msgSent & timer2.Enabled == false)
+                                        //    timer2.Start();
+                                        if (!msgSent2 & timer4.Enabled == false)  // first pass after opened
+                                        {
+                                            if (chime)
+                                            {
+                                                SoundPlayer simpleSound = new SoundPlayer(@"c:\Windows\Media\Windows Notify.wav");
+                                                simpleSound.Play();
+                                                notifyIcon1.Visible = true;
+                                                notifyIcon1.ShowBalloonTip(11000, "Garage Monitor 2", "Garage Door2 Open", ToolTipIcon.Info);
+                                            }
+                                            timer4.Start();
+                                            Log("Alarm Delay Start: " + DateTime.Now);
+                                        }
+                                    }
+                                }
+                                else if (root2.status == "pending")
+                                {
+                                    return;
+                                }
+                                else
+                                {
+                                    Log("Sample error, get_status:  " + responseData2 + "  " + DateTime.Now);
+                                }
+                                if (button5.Text == "Open" & alarm & !msgSent2)
+                                {
+                                    timer4.Stop();
+                                    alarmNumber = "2";
+                                    AlarmMsg(2);
+                                    Log("Alarm Timer Stopped: " + DateTime.Now);
+                                }
+                                if (button5.Text == "Closed" & msgSent2)
+                                    ResetMsg(2);
+                                if (button5.Text == "Closed" & !msgSent2)
+                                {
+                                    timer4.Stop();
+                                }
+
+                            } //end using
+                        } //end if usingdoor2
+
+                    }
                 label2.BackColor = Color.Transparent;
                 label2.Text = "Status:";
                 if (useDoor2)
@@ -604,16 +1000,21 @@ namespace GarageMonitor2
                     label21.Text = "Status:";
                 }
                 // label13.BackColor = Color.Transparent;
+                //textBox10.Text = cond;
+                //textBox14.Text = temp.ToString();
+                //if (stopwatch.IsRunning)
+                //    textBox17.Text = (((((heatHoldTime * 3600000) - (stopwatch.ElapsedMilliseconds)) / 3600000) + 1).ToString());
             }
             catch (Exception ex)
             {
-                Log(DateTime.Now.ToString() +  "  Sample Error: " + ex.ToString());
+                Log(DateTime.Now.ToString() + "  Sample Error: " + ex.ToString());
             }
         }
 
         private async void timer1_Tick(object sender, EventArgs e)
         {
             Sample();
+            GetWeather();
         }
         bool alarm;
 
@@ -776,20 +1177,12 @@ namespace GarageMonitor2
             }
         }
 
-
-        bool RunAtStart;
-        bool localAlarm;
-        string lightDevice;
-        public int delay;
-        private int lightDelay;
-        bool useLight;
-        bool chime;
-        bool useDoor2;
-        private string statusCommand2;
-        private string statusCommand;
+       
 
         private void Form1_Load(object sender, EventArgs e)
         {
+          //  GetWeather();
+         //   timerGetWeather.Start();
             // timer2.Interval = 1000;
             textBox1.Text = PublishVersion.ToString();
             numericUpDown1.Value = GarageMonitor2.Properties.Settings.Default.delay;
@@ -807,8 +1200,20 @@ namespace GarageMonitor2
             textBox4.Text = GarageMonitor2.Properties.Settings.Default.device;
             textBox5.Text = GarageMonitor2.Properties.Settings.Default.lightDevice;
             textBox9.Text = GarageMonitor2.Properties.Settings.Default.device2;
+            textBox11.Text = GarageMonitor2.Properties.Settings.Default.heatDevice;
+            heatDevice = textBox11.Text;
+            textBox12.Text = GarageMonitor2.Properties.Settings.Default.city;
+            city = textBox12.Text;
+            textBox13.Text = GarageMonitor2.Properties.Settings.Default.state;
+            state = textBox13.Text;
             numericUpDown2.Value = GarageMonitor2.Properties.Settings.Default.LightDelay;
+            numericUpDown3.Value = GarageMonitor2.Properties.Settings.Default.heatHoldTime;
             useLight = GarageMonitor2.Properties.Settings.Default.useLight;
+            controlHeat = GarageMonitor2.Properties.Settings.Default.controlHeat;
+            if (controlHeat)
+                checkBox4.Checked = true;
+            else
+                checkBox4.Checked = false;
             chime = GarageMonitor2.Properties.Settings.Default.chime;
           //  useDoor2 = GarageMonitor2.Properties.Settings.Default.useDoor2;
             lightDevice = textBox5.Text;
@@ -818,6 +1223,8 @@ namespace GarageMonitor2
             timerLight.Interval = lightDelay * 60 * 1000;
             device = textBox4.Text;
             device2 = textBox9.Text;
+            heatHoldTime = (int)numericUpDown3.Value;
+            timerHeatHold.Interval = heatHoldTime * 1000 * 3600; // add *3600 for hrs after test confirm
             if (useLight == true)
                 checkBox1.Checked = true;
             else
@@ -869,8 +1276,13 @@ namespace GarageMonitor2
                     button1.PerformClick();
                 }
             }
-
-
+            zip = GarageMonitor2.Properties.Settings.Default.zip;
+            apiToken = GarageMonitor2.Properties.Settings.Default.apiToken;
+            textBox15.Text = zip;
+            textBox16.Text = apiToken;
+            Log("apitoken = " + apiToken);
+            //GetWeather();
+            //timerGetWeather.Start();
         }
 
         private void notifyIcon1_MouseDoubleClick(object sender, MouseEventArgs e)
@@ -926,6 +1338,13 @@ namespace GarageMonitor2
             GarageMonitor2.Properties.Settings.Default.chime = checkBox2.Checked;
             GarageMonitor2.Properties.Settings.Default.device2 = textBox9.Text;
             GarageMonitor2.Properties.Settings.Default.useDoor2 = useDoor2;
+            GarageMonitor2.Properties.Settings.Default.city = textBox12.Text;
+            GarageMonitor2.Properties.Settings.Default.state = textBox13.Text;
+            GarageMonitor2.Properties.Settings.Default.heatDevice = textBox11.Text;
+            GarageMonitor2.Properties.Settings.Default.controlHeat = checkBox4.Checked;
+            GarageMonitor2.Properties.Settings.Default.heatHoldTime = (int)numericUpDown3.Value;
+            GarageMonitor2.Properties.Settings.Default.apiToken = textBox16.Text;
+            apiToken = GarageMonitor2.Properties.Settings.Default.zip = textBox15.Text;
             GarageMonitor2.Properties.Settings.Default.Save();
             Application.ExitThread();
         }
@@ -1214,6 +1633,46 @@ namespace GarageMonitor2
             }
         }
 
+        //heatcontrol
+        private async void HeaterControl(string command)
+        {
+
+            try
+            {
+                checkBox4.BackColor = Color.Yellow;
+                var baseAddress = new Uri("https://connect.insteon.com/api/v2/");
+                using (var httpClient = new HttpClient { BaseAddress = baseAddress })
+                {
+                    httpClient.DefaultRequestHeaders.TryAddWithoutValidation("http", "//docs.insteon.apiary.io/");
+                    httpClient.DefaultRequestHeaders.TryAddWithoutValidation("authentication", "APIKey " + key);
+                    httpClient.DefaultRequestHeaders.TryAddWithoutValidation("authorization", "Bearer " + token);
+                    //  using (var content = new StringContent("{  \"command\": \"get_status\",  \"device_id\": " + device + "}", System.Text.Encoding.Default, "application/json"))
+                    using (var content = new StringContent("{  \"command\": \"" + command + "\",  \"device_id\": " + heatDevice + "}", System.Text.Encoding.Default, "application/json"))
+                    {
+                        using (var response = await httpClient.PostAsync("commands", content))
+                        {
+                            string responseData = await response.Content.ReadAsStringAsync();
+                            //  MessageBox.Show(responseData);
+                            List<string> keyValuePairs = responseData.Split(':').ToList();
+                            //  statusCommand = keyValuePairs[3].Substring(0, keyValuePairs[3].Length - 1);
+
+                            Log("HeatCommand: " + command + " " + DateTime.Now);
+
+                        }
+                    }
+                }
+                checkBox4.BackColor = Color.Transparent;
+            }
+            catch (Exception ex)
+            {
+                Log("Failed HeatControl: " + ex);
+            }
+        }
+
+
+
+
+
         public void OnTimedLightEvent(object source, ElapsedEventArgs e)
         {
             timerLight.Stop();
@@ -1221,6 +1680,33 @@ namespace GarageMonitor2
             LightControl("off");
             lightOn = false;
             Log("Light Timer Stopped: " + DateTime.Now);
+
+        }
+
+      //  private void OnTimedgetWeatherEvent(object source, ElapsedEventArgs e)
+      //  {
+      ////      GetWeather();
+      //      // Refresh();
+      //      //if (stopwatch.IsRunning)
+      //      //    textBox17.Text = (((((heatHoldTime * 3600000) - (stopwatch.ElapsedMilliseconds)) / 3600000) + 1).ToString());
+
+      //      //textBox10.Text = cond;
+      //      //textBox14.Text = temp.ToString();
+
+
+
+      //  }
+
+        public void OnTimedHeatEvent(object source, ElapsedEventArgs e)
+        {
+            timerHeatHold.Stop();
+            Thread.Sleep(500);
+            HeaterControl("off");
+         //   Send("Heater Turned OFF");  //seems to send every 6 hrs, disabeld until problem figured out.  
+            Log("Heat Hold timer Stopped: " + DateTime.Now);
+            stopwatch.Stop();
+            stopwatch.Reset();
+            label28.BackColor = Color.Transparent;
 
         }
 
@@ -1379,7 +1865,48 @@ namespace GarageMonitor2
                 useDoor2 = false;
         }
 
-      
+        private void button7_Click(object sender, EventArgs e)
+        {
+           
+        }
+
+        private void checkBox4_CheckedChanged(object sender, EventArgs e)
+        {
+            if (checkBox4.Checked)
+                controlHeat = true;
+            else
+                controlHeat = false;
+        }
+
+        private void button6_Click(object sender, EventArgs e)
+        {
+            if (button6.Text == "Heater")
+                HeaterControl("on");
+            else
+                HeaterControl("off");
+        }
+
+        private void textBox15_TextChanged(object sender, EventArgs e)
+        {
+            zip = textBox15.Text;
+        }
+
+        private void textBox16_TextChanged(object sender, EventArgs e)
+        {
+            apiToken = textBox16.Text;
+        }
+
+        private void numericUpDown3_ValueChanged(object sender, EventArgs e)
+        {
+            heatHoldTime = (int)numericUpDown3.Value;
+        }
+
+
+        //private void textBox10_TextChanged(object sender, EventArgs e)
+        //{
+        //    //   cond = textBox10.Text;
+        //}
+
 
 
 
